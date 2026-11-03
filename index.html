@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encuesta del curso</title>
+<style>
+  :root{--bg:#f4f1ff;--card:#fff;--tx:#1f1b2e;--mut:#6b6580;--pri:#6c47ff;--pri2:#8d6bff;--bd:#e3ddf7;--ok:#16a34a;--err:#dc2626}
+  @media (prefers-color-scheme:dark){:root{--bg:#141220;--card:#1f1c30;--tx:#f1eefc;--mut:#a39cc0;--bd:#33304d}}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh}
+  .wrap{max-width:560px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:1.5rem;line-height:1.25;margin:10px 0 4px;text-align:center}
+  .sub{text-align:center;color:var(--mut);margin:0 0 18px;font-size:.9rem}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .opt{padding:12px 8px;border:2px solid var(--bd);border-radius:12px;background:transparent;color:var(--tx);font-size:.95rem;cursor:pointer;transition:.15s}
+  .opt:hover{border-color:var(--pri2)}
+  .opt.sel{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:600}
+  .btn{width:100%;margin-top:14px;padding:14px;border:0;border-radius:12px;background:var(--pri);color:#fff;font-size:1rem;font-weight:600;cursor:pointer}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.sec{background:transparent;color:var(--tx);border:2px solid var(--bd)}
+  .btn.danger{background:var(--err)}
+  .msg{text-align:center;padding:26px 10px}
+  .msg .big{font-size:3rem}
+  .foot{text-align:center;margin-top:24px}
+  .foot a{color:var(--mut);font-size:.8rem;cursor:pointer;text-decoration:underline}
+  input[type=text],input[type=password]{width:100%;padding:12px;border:2px solid var(--bd);border-radius:12px;background:transparent;color:var(--tx);font-size:1rem}
+  label{display:block;font-size:.85rem;color:var(--mut);margin:12px 0 6px}
+  .row{margin:10px 0}
+  .rname{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:4px}
+  .bar{height:12px;background:var(--bd);border-radius:99px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--pri),var(--pri2));border-radius:99px;transition:width .4s}
+  .winner{background:linear-gradient(135deg,#ffb300,#ff7a00);color:#fff;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px}
+  .winner b{font-size:1.4rem;display:block}
+  .hidden{display:none}
+  .err{color:var(--err);font-size:.85rem;margin-top:8px;text-align:center}
+  .tot{color:var(--mut);font-size:.85rem;text-align:center;margin:0 0 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- VISTA VOTANTE -->
+  <div id="vVote">
+    <h1 id="question">Cargando…</h1>
+    <p class="sub">Voto anónimo · elegí uno</p>
+    <div class="card" id="voteCard">
+      <div class="grid" id="options"></div>
+      <button class="btn" id="btnVote" disabled>Votar</button>
+      <div class="err hidden" id="voteErr"></div>
+    </div>
+    <div class="card msg hidden" id="doneCard">
+      <div class="big">✅</div>
+      <h2>¡Gracias por votar!</h2>
+      <p class="sub">Tu voto es anónimo. Ya no podés votar de nuevo en este dispositivo.</p>
+    </div>
+    <div class="foot"><a id="adminLink">Admin</a></div>
+  </div>
+
+  <!-- LOGIN ADMIN -->
+  <div id="vLogin" class="hidden">
+    <h1>Panel de control</h1>
+    <div class="card">
+      <label>Contraseña</label>
+      <input type="password" id="pass" autocomplete="off">
+      <button class="btn" id="btnLogin">Entrar</button>
+      <button class="btn sec" id="btnBack1">Volver</button>
+      <div class="err hidden" id="loginErr">Contraseña incorrecta</div>
+    </div>
+  </div>
+
+  <!-- PANEL ADMIN -->
+  <div id="vAdmin" class="hidden">
+    <h1>Panel de control</h1>
+    <p class="sub">Resultados en vivo</p>
+    <div class="card">
+      <div id="winner"></div>
+      <p class="tot" id="total"></p>
+      <div id="results"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <label>Pregunta de la encuesta</label>
+      <input type="text" id="qInput" maxlength="120">
+      <button class="btn" id="btnSaveQ">Guardar pregunta</button>
+      <button class="btn danger" id="btnReset">🔄 Reiniciar encuesta (borra votos)</button>
+      <button class="btn sec" id="btnBack2">Salir del panel</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ============ 1) PEGÁ ACÁ TU CONFIG DE FIREBASE ============ */
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com",
+  projectId: "TU_PROYECTO",
+  appId: "TU_APP_ID"
+};
+/* =========================================================== */
+
+const ADMIN_PASS = "prepromoeco2026";
+const DEFAULT_Q = "¿Quién es el más manija del curso?";
+const NAMES = ["Emanuel","Valentino","Morena","Tomás","Maia","Nahiara","Angeles","Agustina","Lautaro","Giuliana","Dante","Camila","Benji","Valentin","Martina","Thiago Martínez","Sofia Navarro","Sofia Huamani","Jacque","Evelyn","Gonzalo","Thiago Flecha","Pablo","Churrasco","Ian","Elias","Joaquin J.","Joaquin V.","Sebastián"];
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const pollRef = db.ref("poll");
+
+const $ = id => document.getElementById(id);
+let round = null, question = DEFAULT_Q, selected = null, isAdmin = false, votes = {};
+
+function show(v){["vVote","vLogin","vAdmin"].forEach(x=>$(x).classList.toggle("hidden",x!==v));}
+
+/* ---------- Opciones ---------- */
+NAMES.forEach((n,i)=>{
+  const b=document.createElement("button");
+  b.className="opt"; b.textContent=n;
+  b.onclick=()=>{selected=i;[...$("options").children].forEach((c,j)=>c.classList.toggle("sel",j===i));$("btnVote").disabled=false;};
+  $("options").appendChild(b);
+});
+
+/* ---------- Estado de voto en este dispositivo ---------- */
+function hasVoted(){ return round!==null && localStorage.getItem("votedRound")===String(round); }
+function refreshVoteView(){
+  const voted=hasVoted();
+  $("voteCard").classList.toggle("hidden",voted);
+  $("doneCard").classList.toggle("hidden",!voted);
+}
+
+/* ---------- Escuchar pregunta y ronda ---------- */
+pollRef.child("question").on("value",s=>{
+  question=s.val()||DEFAULT_Q;
+  $("question").textContent=question;
+  if(!isAdmin||document.activeElement!==$("qInput")) $("qInput").value=question;
+});
+pollRef.child("round").on("value",s=>{
+  round=s.val()||0;
+  refreshVoteView();
+});
+
+/* ---------- Votar ---------- */
+$("btnVote").onclick=async()=>{
+  if(selected===null||hasVoted()) return;
+  $("btnVote").disabled=true; $("voteErr").classList.add("hidden");
+  try{
+    const r=(await pollRef.child("round").get()).val()||0;
+    await pollRef.child("votes/n"+selected).transaction(v=>(v||0)+1);
+    localStorage.setItem("votedRound",String(r));
+    round=r; selected=null; refreshVoteView();
+  }catch(e){
+    $("voteErr").textContent="No se pudo registrar el voto. Probá de nuevo.";
+    $("voteErr").classList.remove("hidden");
+    $("btnVote").disabled=false;
+  }
+};
+
+/* ---------- Admin ---------- */
+$("adminLink").onclick=()=>{ $("pass").value=""; $("loginErr").classList.add("hidden"); show("vLogin"); };
+$("btnBack1").onclick=()=>show("vVote");
+$("btnBack2").onclick=()=>{isAdmin=false;show("vVote");};
+$("pass").addEventListener("keydown",e=>{if(e.key==="Enter")$("btnLogin").click();});
+$("btnLogin").onclick=()=>{
+  if($("pass").value===ADMIN_PASS){ isAdmin=true; $("qInput").value=question; show("vAdmin"); renderResults(); }
+  else $("loginErr").classList.remove("hidden");
+};
+
+pollRef.child("votes").on("value",s=>{ votes=s.val()||{}; if(isAdmin) renderResults(); });
+
+function renderResults(){
+  const list=NAMES.map((n,i)=>({n,c:votes["n"+i]||0})).sort((a,b)=>b.c-a.c||a.n.localeCompare(b.n));
+  const total=list.reduce((a,x)=>a+x.c,0);
+  const max=list[0].c;
+  $("total").textContent=total+" voto"+(total===1?"":"s")+" en total";
+  if(max>0){
+    const tops=list.filter(x=>x.c===max).map(x=>x.n);
+    $("winner").innerHTML='<div class="winner">🏆 '+(tops.length>1?'Empate':'Más votado')+'<b>'+tops.join(" / ")+'</b>'+max+' voto'+(max===1?'':'s')+'</div>';
+  } else $("winner").innerHTML="";
+  $("results").innerHTML=list.map(x=>{
+    const w=max?Math.round(x.c/max*100):0;
+    return '<div class="row"><div class="rname"><span>'+x.n+'</span><b>'+x.c+'</b></div><div class="bar"><i style="width:'+w+'%"></i></div></div>';
+  }).join("");
+}
+
+$("btnSaveQ").onclick=async()=>{
+  const q=$("qInput").value.trim(); if(!q) return;
+  await pollRef.child("question").set(q);
+  alert("Pregunta guardada ✅");
+};
+
+$("btnReset").onclick=async()=>{
+  if(!confirm("¿Seguro? Se borran todos los votos y todos podrán volver a votar.")) return;
+  await pollRef.child("round").transaction(r=>(r||0)+1);
+  await pollRef.child("votes").remove();
+  alert("Encuesta reiniciada ✅");
+};
+</script>
+</body>
+</html>
